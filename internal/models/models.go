@@ -362,6 +362,7 @@ const (
 	JobTypeLookup        = "lookup"
 	JobTypeCheck         = "check"
 	JobTypeMerge         = "merge"
+	JobTypeExport        = "export"
 )
 
 type JobState struct {

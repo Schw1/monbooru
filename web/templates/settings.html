@@ -1118,6 +1118,9 @@
         <div class="field">
           <label><input type="checkbox" name="find_relation_pairs"{{if $sched.FindRelationPairs}} checked{{end}}> Find relation pairs</label>
         </div>
+        <div class="field">
+          <label><input type="checkbox" name="export_gallery"{{if $sched.ExportGallery}} checked{{end}}> Export gallery</label>
+        </div>
         {{if .MonloaderPaired}}
         <div class="field">
           <input type="hidden" name="lookup_switches" value="1">
@@ -1141,6 +1144,18 @@
             <label><input type="radio" name="mode" value="{{.Name}}"{{if eq $mode .Name}} checked{{end}}> {{.Label}}</label>
             {{end}}
           </div>
+        </div>
+        <div class="field">
+          <label>Export</label>
+          <label>Folder <input type="text" name="export_path" value="{{$sched.ExportPath}}" placeholder="{{$cfg.ExportDir}}"></label>
+          <label>Format
+            <select name="export_format">
+              <option value="db"{{if eq $sched.ExportFormat "db"}} selected{{end}}>Database (.db)</option>
+              <option value="json"{{if eq $sched.ExportFormat "json"}} selected{{end}}>JSON</option>
+              <option value="light"{{if eq $sched.ExportFormat "light"}} selected{{end}}>Light (tags only)</option>
+            </select>
+          </label>
+          <label>Keep the newest <input type="number" name="export_keep" value="{{$sched.ExportKeep}}" min="1" max="365"> exports per gallery</label>
         </div>
         {{if $scope.Show}}
         <div class="field">

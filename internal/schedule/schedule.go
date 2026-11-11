@@ -318,8 +318,9 @@ func hasWork(sc config.ScheduleConfig, galleries []string) bool {
 }
 
 // RunNow runs a pass unless a job holds the lane. The lookup phases run
-// last: an external limit can cut them short without costing the rest,
-// and their writes must not interleave with autotag's.
+// after the other writers: an external limit can cut them short without
+// costing the rest, and their writes must not interleave with autotag's.
+// The export only reads, so it goes after all of them.
 func (s *Scheduler) RunNow() bool {
 	r, err := s.jobs.Reserve()
 	if err != nil {
@@ -413,6 +414,10 @@ func (s *Scheduler) RunNow() bool {
 			}
 			return s.lookup(r, cx, "online lookup", s.lookups.LookupOnline)
 		}) {
+			return true
+		}
+		// After every writing phase, so the export holds tonight's tags.
+		if phase(runs(config.ActionExportGallery), "export "+name, func() error { return s.export(r, cx) }) {
 			return true
 		}
 	}

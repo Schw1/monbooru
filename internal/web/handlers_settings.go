@@ -135,6 +135,30 @@ func (s *Server) settingsSchedulePost(w http.ResponseWriter, r *http.Request) {
 	if !config.IsValidScheduleMode(mode) {
 		mode = config.ScheduleAtTime
 	}
+	// The export fields are read only when sent: a post without them, from
+	// the API or an older page, leaves them as they are.
+	_, sentFormat := r.Form["export_format"]
+	exportFormat := r.FormValue("export_format")
+	if !config.IsValidExportFormat(exportFormat) {
+		exportFormat = config.ExportFormatDB
+	}
+	_, sentKeep := r.Form["export_keep"]
+	exportKeep := 0
+	if sentKeep {
+		n, err := strconv.Atoi(strings.TrimSpace(r.FormValue("export_keep")))
+		if err != nil || n < 1 {
+			writeInlineFlash(w, "err", "Exports to keep must be a whole number of at least 1.")
+			return
+		}
+		exportKeep = n
+	}
+	// Empty keeps the default under the data path.
+	_, sentPath := r.Form["export_path"]
+	exportPath := strings.TrimSpace(r.FormValue("export_path"))
+	if exportPath != "" && !filepath.IsAbs(exportPath) {
+		writeInlineFlash(w, "err", "The export folder must be an absolute path.")
+		return
+	}
 	if err := s.withConfig(func(c *config.Config) error {
 		c.Schedule.Time = timeVal
 		c.Schedule.Mode = mode
@@ -142,6 +166,16 @@ func (s *Server) settingsSchedulePost(w http.ResponseWriter, r *http.Request) {
 		c.Schedule.RemoveOrphans = r.FormValue("remove_orphans") == "on"
 		c.Schedule.RunAutoTaggers = r.FormValue("run_auto_taggers") == "on"
 		c.Schedule.FindRelationPairs = r.FormValue("find_relation_pairs") == "on"
+		c.Schedule.ExportGallery = r.FormValue("export_gallery") == "on"
+		if sentPath {
+			c.Schedule.ExportPath = exportPath
+		}
+		if sentFormat {
+			c.Schedule.ExportFormat = exportFormat
+		}
+		if sentKeep {
+			c.Schedule.ExportKeep = exportKeep
+		}
 		// Drawn only while monloader is paired; a box never on the page was
 		// not unticked.
 		if r.FormValue("lookup_switches") != "" {
@@ -217,6 +251,7 @@ var scheduleColumns = []scheduleColumn{
 	{Action: config.ActionFindRelationPairs, Label: "Pairs", Title: "Find relation pairs"},
 	{Action: config.ActionLookupPTR, Label: "PTR", Title: "Look up unsourced images in the Public Tag Repository", Accent: "peer-accent"},
 	{Action: config.ActionLookupBooru, Label: "Boorus", Title: "Look up unsourced images on online boorus", Accent: "peer-accent"},
+	{Action: config.ActionExportGallery, Label: "Export", Title: "Export gallery"},
 }
 
 // Shown with one gallery too while a list is set, or that list would

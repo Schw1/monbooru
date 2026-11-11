@@ -371,11 +371,24 @@ const (
 	ActionFindRelationPairs = "find_relation_pairs"
 	ActionLookupPTR         = "lookup_ptr"
 	ActionLookupBooru       = "lookup_booru"
+	ActionExportGallery     = "export_gallery"
 )
+
+// Formats a scheduled export writes; the keys match the web export's
+// format parameter.
+const (
+	ExportFormatDB    = "db"
+	ExportFormatJSON  = "json"
+	ExportFormatLight = "light"
+)
+
+var ExportFormats = []string{ExportFormatDB, ExportFormatJSON, ExportFormatLight}
+
+func IsValidExportFormat(v string) bool { return slices.Contains(ExportFormats, v) }
 
 var ScheduleActions = []string{
 	ActionSyncGallery, ActionRemoveOrphans, ActionRunAutoTaggers,
-	ActionFindRelationPairs, ActionLookupPTR, ActionLookupBooru,
+	ActionFindRelationPairs, ActionLookupPTR, ActionLookupBooru, ActionExportGallery,
 }
 
 type ScheduleConfig struct {
@@ -387,6 +400,12 @@ type ScheduleConfig struct {
 	FindRelationPairs bool   `toml:"find_relation_pairs"`
 	LookupPTR         bool   `toml:"lookup_ptr"`
 	LookupBooru       bool   `toml:"lookup_booru"`
+	ExportGallery     bool   `toml:"export_gallery"`
+	// Empty means <data_path>/exports; each gallery gets its own subfolder.
+	ExportPath   string `toml:"export_path,omitempty"`
+	ExportFormat string `toml:"export_format,omitempty"`
+	// How many exports per gallery stay on disk; older ones are deleted.
+	ExportKeep int `toml:"export_keep,omitempty"`
 	// Writers replace the map and its lists rather than write through
 	// them: a config copy shares them.
 	Galleries map[string][]string `toml:"galleries,omitempty"`
@@ -413,6 +432,8 @@ func (sc ScheduleConfig) Enabled(action string) bool {
 		return sc.LookupPTR
 	case ActionLookupBooru:
 		return sc.LookupBooru
+	case ActionExportGallery:
+		return sc.ExportGallery
 	}
 	return false
 }
@@ -423,6 +444,15 @@ func (sc ScheduleConfig) RunsOn(action, gallery string) bool {
 	}
 	names, listed := sc.Galleries[action]
 	return !listed || slices.Contains(names, gallery)
+}
+
+// ExportDir resolves the folder the scheduled export writes into; it is
+// derived, not stored, so a moved data_path carries the exports along.
+func (cfg *Config) ExportDir() string {
+	if cfg.Schedule.ExportPath != "" {
+		return cfg.Schedule.ExportPath
+	}
+	return filepath.Join(cfg.Paths.DataPath, "exports")
 }
 
 func (cfg *Config) MonloaderPaired() bool {
@@ -492,6 +522,9 @@ func Default() *Config {
 			RemoveOrphans:     true,
 			RunAutoTaggers:    false,
 			FindRelationPairs: false,
+			ExportGallery:     false,
+			ExportFormat:      ExportFormatDB,
+			ExportKeep:        defaultExportKeep,
 		},
 		Desktop: DesktopConfig{
 			Tray: true,
@@ -828,6 +861,7 @@ const (
 	defaultIdleReleaseMinutes  = 15
 	defaultMinHitFraction      = 0.05
 	defaultRelationsDistance   = 4
+	defaultExportKeep          = 7
 )
 
 func validate(cfg *Config) error {
@@ -897,6 +931,15 @@ func validate(cfg *Config) error {
 		cfg.Schedule.Time = defaultScheduleTime
 	}
 	cfg.Schedule.Mode = cfg.Schedule.EffectiveMode()
+	if cfg.Schedule.ExportFormat == "" {
+		cfg.Schedule.ExportFormat = ExportFormatDB
+	} else if !IsValidExportFormat(cfg.Schedule.ExportFormat) {
+		logx.Warnf("config: schedule.export_format %q must be one of %v; using %s", cfg.Schedule.ExportFormat, ExportFormats, ExportFormatDB)
+		cfg.Schedule.ExportFormat = ExportFormatDB
+	}
+	if cfg.Schedule.ExportKeep < 1 {
+		cfg.Schedule.ExportKeep = defaultExportKeep
+	}
 	if cfg.Tagger.ExecutionProvider == "" {
 		cfg.Tagger.ExecutionProvider = defaultExecutionProvider
 	} else if !IsValidExecutionProvider(cfg.Tagger.ExecutionProvider) {
