@@ -135,6 +135,21 @@ func (s *Server) settingsSchedulePost(w http.ResponseWriter, r *http.Request) {
 	if !config.IsValidScheduleMode(mode) {
 		mode = config.ScheduleAtTime
 	}
+	exportFormat := r.FormValue("export_format")
+	if !config.IsValidExportFormat(exportFormat) {
+		exportFormat = config.ExportFormatDB
+	}
+	exportKeep, err := strconv.Atoi(strings.TrimSpace(r.FormValue("export_keep")))
+	if err != nil || exportKeep < 1 {
+		writeInlineFlash(w, "err", "Exports to keep must be a whole number of at least 1.")
+		return
+	}
+	// Empty keeps the default under the data path.
+	exportPath := strings.TrimSpace(r.FormValue("export_path"))
+	if exportPath != "" && !filepath.IsAbs(exportPath) {
+		writeInlineFlash(w, "err", "The export folder must be an absolute path.")
+		return
+	}
 	if err := s.withConfig(func(c *config.Config) error {
 		c.Schedule.Time = timeVal
 		c.Schedule.Mode = mode
@@ -142,6 +157,10 @@ func (s *Server) settingsSchedulePost(w http.ResponseWriter, r *http.Request) {
 		c.Schedule.RemoveOrphans = r.FormValue("remove_orphans") == "on"
 		c.Schedule.RunAutoTaggers = r.FormValue("run_auto_taggers") == "on"
 		c.Schedule.FindRelationPairs = r.FormValue("find_relation_pairs") == "on"
+		c.Schedule.ExportGallery = r.FormValue("export_gallery") == "on"
+		c.Schedule.ExportPath = exportPath
+		c.Schedule.ExportFormat = exportFormat
+		c.Schedule.ExportKeep = exportKeep
 		// Drawn only while monloader is paired; a box never on the page was
 		// not unticked.
 		if r.FormValue("lookup_switches") != "" {
@@ -217,6 +236,7 @@ var scheduleColumns = []scheduleColumn{
 	{Action: config.ActionFindRelationPairs, Label: "Pairs", Title: "Find relation pairs"},
 	{Action: config.ActionLookupPTR, Label: "PTR", Title: "Look up unsourced images in the Public Tag Repository", Accent: "peer-accent"},
 	{Action: config.ActionLookupBooru, Label: "Boorus", Title: "Look up unsourced images on online boorus", Accent: "peer-accent"},
+	{Action: config.ActionExportGallery, Label: "Export", Title: "Export gallery"},
 }
 
 // Shown with one gallery too while a list is set, or that list would
